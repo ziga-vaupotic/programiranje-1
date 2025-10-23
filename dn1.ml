@@ -157,50 +157,95 @@ type ('a, 'b) sum = In1 of 'a | In2 of 'b
  ### $A \times B \cong B \times A$
 [*----------------------------------------------------------------------------*)
 
-let phi1 _ = ()
-let psi1 _ = ()
+let phi1 (a, b) = (b, a)
+let psi1 (b, a) = (a, b)
 
 (*----------------------------------------------------------------------------*
  ### $A + B \cong B + A$
 [*----------------------------------------------------------------------------*)
 
-let phi2 _ = ()
-let psi2 _ = ()
+let phi2 x = (
+  match x with
+  | In1 a -> In2 a
+  | In2 b -> In1 b
+)
+let psi2 x = (
+  match x with
+  | In2 a -> In1 a
+  | In1 b -> In2 b
+)
 
 (*----------------------------------------------------------------------------*
  ### $A \times (B \times C) \cong (A \times B) \times C$
 [*----------------------------------------------------------------------------*)
 
-let phi3 _ = ()
-let psi3 _ = ()
+let phi3 (a, (b, c)) = ((a, b), c)
+let psi3 ((a,b), c) = (a, (b, c))
+
 
 (*----------------------------------------------------------------------------*
  ### $A + (B + C) \cong (A + B) + C$
 [*----------------------------------------------------------------------------*)
 
-let phi4 _ = ()
-let psi4 _ = ()
+let phi4 x = (
+  match x with
+  | In1 a -> In1(In1 a)
+  | In2 bc -> (
+      match bc with
+      | In1 b -> In1(In2(b))
+      | In2 c -> In2(c)
+    )
+)
+let psi4 x = (
+  match x with
+    In1 ab -> (
+      match ab with
+      | In1 a -> In1(a)
+      | In2 b -> In2(In1(b))
+    )  
+  | In2 c -> In2(In2(c))
+)
 
 (*----------------------------------------------------------------------------*
  ### $A \times (B + C) \cong (A \times B) + (A \times C)$
 [*----------------------------------------------------------------------------*)
 
-let phi5 _ = ()
-let psi5 _ = ()
+let phi5 (a, bc) = (
+  match bc with
+  | In1 b -> In1((a,b))
+  | In2 c -> In2((a,c))
+)
+let psi5 x = (
+    match x with
+  | In1 (a, b) -> (a, In1(b))
+  | In2 (a, c) -> (a, In2(c))
+)
 
 (*----------------------------------------------------------------------------*
  ### $A^{B + C} \cong A^B \times A^C$
 [*----------------------------------------------------------------------------*)
 
-let phi6 _ = ()
-let psi6 _ = ()
+let phi6 f = (
+  ( (fun x -> f (In1 x)), (fun x -> f (In2 x)))
+)
+let psi6 f g = (
+  fun x ->
+    match x with
+    | In1(a) -> f(a)
+    | In2(b) -> g(b)
+)
 
 (*----------------------------------------------------------------------------*
  ### $(A \times B)^C \cong A^C \times B^C$
 [*----------------------------------------------------------------------------*)
 
-let phi7 _ = ()
-let psi7 _ = ()
+let phi7 f = (
+  let pi1 x = let (a, b) = f(x) in a
+  in let pi2 x = let (a, b) = f(x) in b
+  in (fun x -> (pi1 x),fun x -> (pi2 x))
+)
+let psi7 (f, g) =
+  fun x -> (f x, g x)
 
 (*----------------------------------------------------------------------------*
  ## Permutacije
@@ -518,6 +563,11 @@ let primer_sudoku_1 = primer_mreze |> dodaj 0 8 2
  izpis v zgornji obliki.
 [*----------------------------------------------------------------------------*)
 
+(* 
+Tukaj bi lahko uporabil array.mapi podobno kot zgoraj, ampak se je po mnogih spremebah to spremenilo samo v rekurizijo.
+Ideja je, da kar vrnem array, preko Array.mapi, in potem uporabim to_list in concat, da dobim string !
+*)
+
 let izpis_mreze mreza = (
   let dobi_vrstico vrstica = 
       let rec cez_vrstico j =
@@ -605,7 +655,15 @@ let primer_sudoku_3 = primer_resitve |> izpis_resitve |> print_endline
  mreži podana številka, v rešitvi nahaja enaka številka.
 [*----------------------------------------------------------------------------*)
 
-let ustreza _ _ = ()
+let ustreza mreza1 resitev = (
+  Array.for_all2 (fun vrstica1 vrstica2 ->
+    Array.for_all2 (fun celica res ->
+      match celica with
+      | None -> true
+      | Some n -> n = res
+    ) vrstica1 vrstica2
+  ) mreza1 resitev
+)
 
 let primer_sudoku_4 = ustreza primer_mreze primer_resitve
 (* val primer_sudoku_4 : bool = true *)
@@ -638,7 +696,10 @@ let primer_sudoku_4 = ustreza primer_mreze primer_resitve
  ```
 [*----------------------------------------------------------------------------*)
 
-let ni_v_vrstici _ _  = ()
+let ni_v_vrstici (m, vrstica_id) st  = 
+    let vrstica = Array.get m vrstica_id
+    in
+    not (Array.exists (fun x -> x = Some st) vrstica)
 
 let primer_sudoku_5 = ni_v_vrstici (primer_mreze, 0) 1
 (* val primer_sudoku_5 : bool = true *)
@@ -646,9 +707,27 @@ let primer_sudoku_5 = ni_v_vrstici (primer_mreze, 0) 1
 let primer_sudoku_6 = ni_v_vrstici (primer_mreze, 1) 1
 (* val primer_sudoku_6 : bool = false *)
 
-let ni_v_stolpci _ _  = ()
+let ni_v_stolpci (m, stolpec_id) st = (
+  let stolpec = Array.map (fun vrsitca -> Array.get vrsitca stolpec_id) m
+  in
+  not (Array.exists (fun x -> x = Some st) stolpec)
+)
 
-let ni_v_skatli _ _  = ()
+let ni_v_skatli (m, id) st  = (
+  let vrstica_start = (id/3) * 3
+  in let stolpec_start = (id mod 3) * 3 in
+  let rec pojdi_cez_polje i =
+    if i > 8 then
+      []
+    else
+      let x_curr = vrstica_start + (i / 3) in
+      let y_curr = stolpec_start + (i mod 3) in
+      (m.(x_curr).(y_curr) = Some st) :: pojdi_cez_polje(i + 1)
+  in
+  let seznam = pojdi_cez_polje 0 in
+  not (List.exists (fun x -> x = true) seznam)
+)
+
 
 (*----------------------------------------------------------------------------*
  Napišite funkcijo `kandidati : mreza -> int -> int -> int list option`, ki
@@ -657,7 +736,22 @@ let ni_v_skatli _ _  = ()
  funkcija vrne `None`.
 [*----------------------------------------------------------------------------*)
 
-let kandidati _ _ _ = ()
+let kandidati m i j = (
+  let rec poglej_kandidate k =
+    if k > 9 then
+      []
+    else
+      let id_skatle i j =
+        let vrstice = i / 3 in   (* integer division *)
+        let stolpec = j/ 3 in
+        vrstice * 3 + stolpec in
+      let pogoj = (ni_v_vrstici (m, i) k) && (ni_v_stolpci (m, j) k) && (ni_v_skatli (m, id_skatle j i) k) in 
+      match pogoj with
+        | true -> k ::  poglej_kandidate (k + 1)
+        | false -> poglej_kandidate (k + 1)
+  in
+  poglej_kandidate 1
+)
 
 let primer_sudoku_7 = kandidati primer_mreze 0 2
 (* val primer_sudoku_7 : int list option = Some [1; 2; 3] *)
