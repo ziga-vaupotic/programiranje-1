@@ -737,20 +737,27 @@ let ni_v_skatli (m, id) st  = (
 [*----------------------------------------------------------------------------*)
 
 let kandidati m i j = (
-  let rec poglej_kandidate k =
-    if k > 9 then
-      []
-    else
+  match m.(i).(j) with
+  | Some _ -> None  (* Celica ni prazna *)
+  | None ->
       let id_skatle i j =
-        let vrstice = i / 3 in   (* integer division *)
-        let stolpec = j/ 3 in
-        vrstice * 3 + stolpec in
-      let pogoj = (ni_v_vrstici (m, i) k) && (ni_v_stolpci (m, j) k) && (ni_v_skatli (m, id_skatle j i) k) in 
-      match pogoj with
-        | true -> k ::  poglej_kandidate (k + 1)
-        | false -> poglej_kandidate (k + 1)
-  in
-  poglej_kandidate 1
+        let vrstice = i / 3 in
+        let stolpec = j / 3 in
+        vrstice * 3 + stolpec
+      in
+      let rec poglej_kandidate k =
+        if k > 9 then
+          []
+        else
+          let pogoj =
+            (ni_v_vrstici (m, i) k)
+            && (ni_v_stolpci (m, j) k)
+            && (ni_v_skatli (m, id_skatle i j) k)
+          in
+          if pogoj then k :: poglej_kandidate (k + 1)
+          else poglej_kandidate (k + 1)
+      in
+      Some (poglej_kandidate 1)
 )
 
 let primer_sudoku_7 = kandidati primer_mreze 0 2
@@ -774,7 +781,69 @@ let primer_sudoku_8 = kandidati primer_mreze 0 0
  možnosti.*
 [*----------------------------------------------------------------------------*)
 
-let rec resi _ = ()
+let resi mreza = (
+  (* pomožna funkcija za kopiranje mreže *)
+  let kopiraj_mrezo m =
+    Array.init 9 (fun i -> Array.copy m.(i))
+  in
+
+  (* najdi prazno celico z najmanj kandidati *)
+  let najdi_min_kandidate m =
+    let dolzina_kandidatov kandidatii =
+      match kandidatii with
+      | Some lst -> List.length lst
+      | None -> max_int
+    in
+    let rec pojdi_cez_mrezo (pos, min) n = 
+      let i = n / 9 in
+      let j = n mod 9 in
+      let kandidati_l = kandidati m i j in
+      let len = dolzina_kandidatov kandidati_l in
+      let (pos', min') = if len >= min then (pos, min) else (n, len) in
+      if n = 80 then
+        (pos', min')
+      else
+        pojdi_cez_mrezo (pos', min') (n+1)
+    in
+    let (pos, min) = pojdi_cez_mrezo (0, max_int) 0 in
+    if min = max_int then
+      None 
+    else
+      let i = pos / 9 in
+      let j = pos mod 9 in
+      match kandidati m i j with
+      | Some lst when lst <> [] -> Some (i, j, lst)
+      | _ -> None
+  in
+
+
+  let rec resi m =
+    match najdi_min_kandidate m with
+    | None -> Some m  (* ni več praznih celic → rešeno *)
+    | Some (i, j, kandidati) ->
+        let rec poizkusi = function
+          | [] -> None
+          | k :: ostalo ->
+              let nova_mreza = kopiraj_mrezo m in
+              nova_mreza.(i).(j) <- Some k;
+              match resi nova_mreza with
+              | Some r -> Some r
+              | None -> poizkusi ostalo
+        in
+        poizkusi kandidati
+  in
+  match resi mreza with
+  | None -> None
+  | Some resitev_mreza ->
+      let resitev =
+        Array.map (fun vrstica ->
+          Array.map (function
+            | Some element -> element
+            | None -> 0 (* To se ne more zgodit, tako da igonoriramo...*)
+          ) vrstica
+        ) resitev_mreza in
+      Some resitev
+)
 
 let primer_sudoku_9 = resi primer_mreze
 (* val primer_sudoku_9 : resitev option =
